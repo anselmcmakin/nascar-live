@@ -16,14 +16,14 @@
  <div class="seg" id="segSpd"><button data-x="1" class="on">1x</button><button data-x="2">2x</button><button data-x="4">4x</button></div>
 </div>
 <div id="mapwrap"><canvas id="map" width="1360" height="910"></canvas>
- <div id="trackname"></div><div id="est">Positions estimated from timing</div>
+ <div id="trackname"></div><div id="est">Positions estimated from timing · Track outlines © OpenStreetMap contributors</div>
  <div id="focus" class="glass hidden"></div><div id="next" class="glass hidden"></div><div id="finish" class="glass hidden"></div>
 </div>
 <div id="board" class="glass"><div id="bhead"><span>Running order</span><span id="bsel">Tap a driver to follow</span></div><div id="rows"></div></div>
 <div id="menu" class="glass hidden"></div><div id="toast" class="hidden"></div>
-<footer id="foot">Unofficial fan project. Not affiliated with NASCAR. Positions estimated from timing.</footer>
+<footer id="foot">Unofficial fan project. Not affiliated with NASCAR. Positions estimated from timing. Track outlines © OpenStreetMap contributors.</footer>
 <script>window.PWA=true;window.NO_BUNDLED_BADGES=true;</script>
-<script src="roster.js"></script><script src="tracks.js"></script><script src="testrace.js"></script><script src="app.js"></script>
+<script src="roster.js"></script><script src="tracks_real.js"></script><script src="tracks.js"></script><script src="testrace.js"></script><script src="app.js"></script>
 <script>
 (function(){var $=function(s){return document.querySelectorAll(s)};
  function sync(){var S=NL.state;$('#segMode button').forEach(function(b){b.classList.toggle('on',b.dataset.m===S.mode)});

@@ -25,13 +25,17 @@ var BY_ID={162:'triOval',43:'triOval',41:'triOval',42:'triOval',40:'oval',111:'t
  105:'superTri',82:'superTri',22:'paperclip',14:'bowl',159:'bowl',177:'oval',26:'dOval',206:'oval',138:'oval',103:'oval',45:'egg',47:'oval',51:'indy',175:'oval',
  4:'egg',84:'phoenix',123:'indy',198:'pocono'};
 var ROAD=[157,210,214,204,218,1001,75,220,1002,221,99,222,72,34,209,211,212];
-window.trackShape=function(id,type){var k=BY_ID[id];if(!k){type=(type||'').trim();
+function pairs(a){var o=[];for(var i=0;i+1<a.length;i+=2)o.push([a[i],a[i+1]]);return o}
+window.trackShape=function(id,type){var R=window.REAL_TRACKS&&window.REAL_TRACKS[id];
+  if(R){var P=pairs(R.p),L=[0],A=0,j;for(j=1;j<=P.length;j++){var a=P[j-1],b=P[j%P.length];L.push(L[j-1]+Math.hypot(b[0]-a[0],b[1]-a[1]));A+=a[0]*b[1]-b[0]*a[1]}
+    return {kind:'real',pts:P,cum:L,len:L[L.length-1],road:!!R.r,pit:R.pit?pairs(R.pit):null,turns:R.t||null,sign:A<0?1:-1,name:R.n}}
+  var k=BY_ID[id];if(!k){type=(type||'').trim();
   k=(ROAD.indexOf(id)>=0||/Road|Street/.test(type))?'road':type==='Superspeedway'?'superTri':/Short/.test(type)?'bowl':'triOval'}
   var P=S[k](),i=0,best=1e9;for(var j=0;j<P.length;j++){var d=Math.abs(P[j][0])+(P[j][1]>0?0:9);if(d<best){best=d;i=j}}
   P=P.slice(i).concat(P.slice(0,i));var L=[0];for(j=1;j<=P.length;j++){var a=P[j-1],b=P[j%P.length];L.push(L[j-1]+Math.hypot(b[0]-a[0],b[1]-a[1]))}
-  return {kind:k,pts:P,cum:L,len:L[L.length-1],road:k==='road'}};
+  return {kind:k,pts:P,cum:L,len:L[L.length-1],road:k==='road',sign:1}};
 // point at fraction f (0..1) -> {x,y,nx,ny} in shape coords, n = outward normal
 window.trackPoint=function(T,f){f=((f%1)+1)%1;var s=f*T.len,lo=0,hi=T.cum.length-1;while(hi-lo>1){var m=(lo+hi)>>1;if(T.cum[m]<=s)lo=m;else hi=m}
   var a=T.pts[lo%T.pts.length],b=T.pts[(lo+1)%T.pts.length],t=(s-T.cum[lo])/((T.cum[lo+1]-T.cum[lo])||1),dx=b[0]-a[0],dy=b[1]-a[1],d=Math.hypot(dx,dy)||1;
-  return {x:a[0]+dx*t,y:a[1]+dy*t,nx:-dy/d,ny:dx/d}};
+  var g=T.sign||1;return {x:a[0]+dx*t,y:a[1]+dy*t,nx:-dy/d*g,ny:dx/d*g}};
 })();
