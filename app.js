@@ -49,7 +49,7 @@ function getJSON(url,cb){var done=false;
 getJSON.n=0;
 var polling=false;
 function poll(){if(S.mode==='test'){ingest(TestRace.feed(clock()),clock());return}
-  if(polling&&performance.now()-polling<15000)return;polling=performance.now();var url=Q.feed||FEED;getJSON(url+(Q.feed?'':'?_='+Date.now()),function(j){polling=false;if(j&&j.vehicles&&S.mode==='live')ingest(j,clock())})}
+  if(polling&&performance.now()-polling<15000)return;polling=performance.now();var url=Q.feed||FEED;poll.k=(poll.k||0)+1;if(!Q.feed&&poll.k%2&&S.feed&&S.feed.series_id&&S.feed.race_id)url='https://cf.nascar.com/live/feeds/series_'+S.feed.series_id+'/'+S.feed.race_id+'/live_feed.json';getJSON(url+(Q.feed?'':'?_='+Date.now()),function(j){polling=false;if(j&&j.vehicles&&S.mode==='live'){if(S.feed&&j.run_id===S.feed.run_id&&j.elapsed_time<S.feed.elapsed_time)return;ingest(j,clock())}})}
 function lapsLed(v){var n=0;(v.laps_led||[]).forEach(function(l){if(l.end_lap>=1)n+=l.end_lap-Math.max(1,l.start_lap)+1});return n}
 function stops(v){return (v.pit_stops||[]).filter(function(p){return p.pit_in_elapsed_time>0||p.pit_in_lap_count>0}).length}
 function inPit(v){var p=(v.pit_stops||[]).slice(-1)[0];return !!(p&&p.pit_in_elapsed_time>0&&p.pit_out_elapsed_time<p.pit_in_elapsed_time)}
@@ -58,10 +58,10 @@ function gapTxt(v){if(v.running_position===1)return 'Leader';if(v.delta<0)return
 function ingest(f,at){var first=!S.feed;
   // Only re-anchor the clock when the feed actually moved on; identical/stale polls must not pull cars back.
   var changed=first||!S.feed||f.elapsed_time!==S.feed.elapsed_time||f.lap_number!==S.feed.lap_number||f.run_id!==S.feed.run_id;
-  S.feed=f;if(changed){S.feedClock=at;S.lastChange=at}var V=f.vehicles.slice().sort(function(a,b){return a.running_position-b.running_position});f.vehicles=V;
+  S.feed=f;if(changed){S.feedClock=at;S.lastChange=at;S.updWall=Date.now()}var V=f.vehicles.slice().sort(function(a,b){return a.running_position-b.running_position});f.vehicles=V;
   if(S.trackId!==f.track_id){S.trackId=f.track_id;S.track=trackShape(f.track_id,'');drawTrack();}
   var race=f.run_type===3,L=V[0]||{},nominal=f.track_length?f.track_length*3600/(f.track_length<1?95:f.track_length>2.4?190:165):30;
-  var lt=L.last_lap_time>0?L.last_lap_time:(S.lapT||nominal);if(f.flag_state===2&&lt<nominal*1.2)lt=Math.max(lt,nominal*1.45);S.lapT=lt;
+  var lt=L.last_lap_time>0?L.last_lap_time:(S.lapT||nominal);if(f.flag_state===2&&lt<nominal*1.2)lt=Math.max(lt,(S.greenLT||nominal)*1.6);if(f.flag_state===1&&L.last_lap_time>0&&L.last_lap_time<nominal*1.2)S.greenLT=L.last_lap_time;S.lapT=lt;
   var le=f.elapsed_time-(L.vehicle_elapsed_time||0);
   if(race&&L.vehicle_elapsed_time>0&&le>=0&&le<lt*1.5)S.lf=le/lt;           // leader's progress since crossing the line
   else if(f.lap_number!==S.prevLap)S.lf=0; else S.lf+=0;                    // dead reckoning (advanced in frame())
@@ -80,7 +80,7 @@ function ingest(f,at){var first=!S.feed;
   var age=(Date.now()-Date.parse(f.time_of_day_os))/60000;S.liveActive=S.mode==='test'||(!Q.nolive&&age<15&&f.flag_state!==9);
   if(race&&f.flag_state===9){if(!S.finishSeen)S.finishSeen=performance.now();}else S.finishSeen=0;
   if(first||performance.now()-S.lastTick>9000||f.lap_number!==S.tickLap)buildTicker();
-  renderBoard();renderHeader();renderFocus();renderFinish();renderNext()}
+  renderBoard();renderHeader();liveTick();renderFocus();renderFinish();renderNext()}
 // ---------- header + ticker ----------
 var FL={1:['GREEN','f1'],2:['CAUTION','f2'],3:['RED','f3'],4:['WHITE','f4'],8:['PRE-RACE','f8'],9:['CHECKERED','f9']};
 function flagOf(f){var x=FL[f.flag_state]||['—','f0'];if(f.run_type!==3&&f.flag_state===1)x=['GREEN','f1'];return x}
@@ -163,13 +163,13 @@ function drawTrack(){var T=S.track,x0=1e9,x1=-1e9,y0=1e9,y1=-1e9;T.pts.forEach(f
 // dot radius: ~45% of the old 10px dot, scaled with how large the track is drawn (bigger on phone's virtual canvas)
 function dotR(){return Math.max(3.6,Math.min(6,(PHONE?5.4:4.6)*Math.sqrt(G.s/(PHONE?250:470))))}
 function wrap(d){d=((d%1)+1.5)%1-.5;return d}
-function feedDt(now){return Math.max(0,Math.min(now-S.feedClock,15))} // stop extrapolating if the feed stalls >15 s
+function feedDt(now){return Math.max(0,Math.min(now-S.feedClock,90))} // keep dead-reckoning between ~30 s CDN refreshes; stop if stalled >90 s
 function targetFrac(c,now){var dt=feedDt(now),f=S.feed;if(f.run_type===3){if(f.flag_state===8&&f.lap_number<=1&&f.elapsed_time<=0)return -c.off-0.001*c.rank;
   return c.leadLaps+S.lf+dt/S.lapT-c.off}return c.own+dt/(c.ownT||S.lapT)}
 // Monotonic motion: cars only move forward at their expected pace; the estimate error is eased out over ~1.5 s
 // by speeding up (max 2x) or slowing down (min 0.25x), never by jumping back. Snaps only on first sight,
 // a new lap count / pit change, or when far behind the estimate. Race mode keeps running order (rubber band).
-function advance(list,now,dts){var race=S.feed.run_type===3,stalled=now-S.feedClock>15;
+function advance(list,now,dts){var race=S.feed.run_type===3,stalled=now-S.feedClock>90;
   list.sort(function(a,b){return a.rank-b.rank});var prev=null;
   list.forEach(function(c){var tf=targetFrac(c,now),base=1/((race?S.lapT:c.ownT)||S.lapT||30),err=race?tf-c.pos:wrap(tf-c.pos);
     if(c.pos==null||S.freeze||isNaN(c.pos)){c.pos=tf}
@@ -180,6 +180,10 @@ function advance(list,now,dts){var race=S.feed.run_type===3,stalled=now-S.feedCl
     if(race&&!S.freeze&&prev&&!c.pit&&!prev.pit&&c.pos>prev.pos-0.0012)c.pos=Math.max(c.posPrev==null?-1e9:c.posPrev,prev.pos-0.0012);
     c.posPrev=c.pos;c.disp=((c.pos%1)+1)%1;if(!c.pit)prev=c})}
 var lastF=0;
+function liveTick(){if(!S.feed||S.mode!=='live')return;var f=S.feed,race=f.run_type===3,el=$('updago');if(!el){el=document.createElement('div');el.id='updago';el.style.cssText='position:fixed;right:10px;bottom:6px;font:500 12px Inter,sans-serif;color:rgba(255,255,255,.38);z-index:50;pointer-events:none';document.body.appendChild(el)}
+  var ago=S.updWall?Math.round((Date.now()-S.updWall)/1000):0;el.textContent='NASCAR data updated '+ago+'s ago';
+  if(race&&f.flag_state!==9&&f.flag_state!==8&&f.laps_in_race){var est=Math.min(f.laps_in_race,f.lap_number+Math.floor(S.lf+feedDt(clock())/S.lapT));setT('lap','LAP '+est+' / '+f.laps_in_race);setT('togo',f.laps_in_race-est>0?(f.laps_in_race-est)+' TO GO':'FINAL')}}
+setInterval(liveTick,1000);
 function frame(ts){requestAnimationFrame(frame);if(ts-lastF<(window.PWA?14:30)&&!S.freeze)return;var dts=Math.min(.25,(ts-lastF)/1000)*(S.mode==='test'?S.speed:1);lastF=ts;
   if(S.mode==='test'&&!S.freeze&&S.feed&&clock()-S.feedClock>2.5*S.speed)poll();
   if(S.tickW>0&&!S.freeze){S.tickOff-=dts*120;if(S.tickOff<=-S.tickW)S.tickOff+=S.tickW;$('tkstrip').style.transform='translate3d('+S.tickOff.toFixed(1)+'px,0,0)'}
