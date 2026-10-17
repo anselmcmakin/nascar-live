@@ -1,0 +1,39 @@
+/* PWA additions: portrait phone layout (body.phone); landscape mirrors the TV layout via zoom (body.land). */
+html{-webkit-text-size-adjust:100%;touch-action:manipulation}
+body.pwa{-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.pwa #est,.pwa #menu{display:none!important}
+.pwa .x{display:block;position:absolute;right:14px;top:10px;font-size:22px;color:var(--dim);padding:6px 10px;cursor:pointer}
+#controls{display:flex;gap:10px;flex-wrap:wrap}
+.seg{display:inline-flex;background:rgba(255,255,255,.07);border:1px solid var(--line);border-radius:12px;padding:3px}
+.seg button{font:600 15px Inter,system-ui,sans-serif;color:#fff;background:none;border:0;padding:8px 12px;border-radius:9px}
+.seg button.on{background:var(--acc);color:#000}
+#foot{font-size:13px;color:rgba(255,255,255,.45)}
+.row,#map{cursor:pointer}
+/* landscape (TV layout scaled) */
+body.land #controls{position:absolute;left:30px;top:1040px;z-index:4}body.land #controls .seg button{font-size:18px}
+body.land #foot{position:absolute;right:560px;bottom:14px;font-size:16px}
+/* portrait phone */
+body.phone,html:has(body.phone){width:100%;height:auto;min-height:100%;overflow-x:hidden;overflow-y:auto}
+body.phone{padding:0 env(safe-area-inset-right) calc(env(safe-area-inset-bottom) + 10px) env(safe-area-inset-left);background:#0b0d13}
+.phone #ticker{position:sticky;top:0;z-index:6;width:100%;height:calc(54px + env(safe-area-inset-top));padding-top:env(safe-area-inset-top)}
+.phone #tkfix{gap:8px;padding:0 10px}.phone .flag{min-width:64px;height:30px;font-size:12px;letter-spacing:1px;border-radius:8px;padding:0 6px}
+.phone .flag span{font-size:11px!important;padding:2px 4px!important}
+.phone #lap{font-size:16px}.phone #togo{font-size:11px}.phone #tkstrip{height:54px}
+.phone .ti{font-size:15px;gap:6px;margin-right:20px}.phone .ti .k{font-size:11px}.phone .bdg{height:22px}.phone .fb{font-size:19px;line-height:22px}
+.phone #sub{position:static;width:auto;height:auto;padding:10px 12px 4px;font-size:14px;gap:8px;flex-wrap:wrap;white-space:normal}
+.phone .mode{font-size:11px;padding:4px 8px}.phone .ser{font-size:11px;padding:3px 7px}
+.phone #controls{padding:6px 12px}.phone .seg button{font-size:14px;padding:7px 10px}
+.phone #mapwrap{position:relative;left:auto;top:auto;width:100%;height:auto}
+.phone #map{position:relative;display:block}
+.phone #trackname{font-size:12px;right:12px;top:2px}
+.phone #focus,.phone #next,.phone #finish{position:relative;left:auto;top:auto;transform:none;width:auto;margin:6px 12px;padding:14px 16px;border-radius:18px}
+.phone #focus .nm{font-size:20px}.phone #focus .mf{font-size:13px}.phone #focus .pos{font-size:34px;margin-right:28px}
+.phone #focus .grid div{font-size:17px}.phone #focus .grid span{font-size:11px}.phone #focus .hint{display:none}
+.phone #next .nr .r{font-size:16px}.phone #next .nr.first .r{font-size:18px}.phone #next .nr .t{font-size:13px}.phone #next .nr .ser{min-width:74px}.phone #next .hint{font-size:13px}
+.phone #finish .wn{font-size:26px}.phone #finish .w img{height:50px!important}.phone #finish ol{width:auto;font-size:16px}.phone #finish .chk{margin:-14px -16px 12px}
+.phone #board{position:static;width:auto;height:auto;margin:8px 12px;padding:10px 6px;border-radius:18px}
+.phone #bhead{font-size:12px}
+.phone .row{height:44px;font-size:16px;gap:6px;padding:0 6px}.phone .row .ps{width:26px}.phone .row .bd{width:44px}.phone .row .bd img{height:24px}
+.phone .row .gp{width:72px;font-size:14px}.phone .row .ll{width:58px;font-size:13px}.phone .row .pt{font-size:11px;padding:1px 4px}
+.phone #toast{position:fixed;top:calc(70px + env(safe-area-inset-top));font-size:15px;padding:10px 16px;white-space:nowrap}
+.phone #foot{padding:10px 16px 4px;text-align:center}

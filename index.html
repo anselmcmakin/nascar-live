@@ -1,0 +1,38 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,viewport-fit=cover">
+<title>NASCAR Live</title>
+<meta name="description" content="Unofficial live NASCAR timing ticker and estimated track map.">
+<meta name="theme-color" content="#0b0d13">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"><meta name="apple-mobile-web-app-title" content="NASCAR Live">
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icons/apple-touch-icon.png"><link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css"><link rel="stylesheet" href="phone.css"></head><body class="pwa">
+<div id="ticker"><div id="tkfix"><div id="flag" class="flag f0">—</div><div id="lapbox"><div id="lap">LAP —</div><div id="togo"></div></div></div>
+ <div id="tkwrap"><div id="tkstrip"></div></div></div>
+<div id="sub"><span id="mode" class="mode">LIVE</span><span id="title">Loading NASCAR timing…</span><span id="stage"></span><span id="stats"></span></div>
+<div id="controls">
+ <div class="seg" id="segMode"><button data-m="live" class="on">Live</button><button data-m="test">Test race</button></div>
+ <div class="seg" id="segSer"><button data-s="cup">Cup</button><button data-s="oreilly">O'Reilly</button><button data-s="trucks">Trucks</button></div>
+ <div class="seg" id="segSpd"><button data-x="1" class="on">1x</button><button data-x="2">2x</button><button data-x="4">4x</button></div>
+</div>
+<div id="mapwrap"><canvas id="map" width="1360" height="910"></canvas>
+ <div id="trackname"></div><div id="est">Positions estimated from timing</div>
+ <div id="focus" class="glass hidden"></div><div id="next" class="glass hidden"></div><div id="finish" class="glass hidden"></div>
+</div>
+<div id="board" class="glass"><div id="bhead"><span>Running order</span><span id="bsel">Tap a driver to follow</span></div><div id="rows"></div></div>
+<div id="menu" class="glass hidden"></div><div id="toast" class="hidden"></div>
+<footer id="foot">Unofficial fan project. Not affiliated with NASCAR. Positions estimated from timing.</footer>
+<script>window.PWA=true;window.NO_BUNDLED_BADGES=true;</script>
+<script src="roster.js"></script><script src="tracks.js"></script><script src="testrace.js"></script><script src="app.js"></script>
+<script>
+(function(){var $=function(s){return document.querySelectorAll(s)};
+ function sync(){var S=NL.state;$('#segMode button').forEach(function(b){b.classList.toggle('on',b.dataset.m===S.mode)});
+  document.getElementById('segSpd').style.display=S.mode==='test'?'':'none';
+  $('#segSpd button').forEach(function(b){b.classList.toggle('on',+b.dataset.x===S.speed)});
+  var cur=S.series||(S.mode==='test'?TestRace.series():0);$('#segSer button').forEach(function(b){b.classList.toggle('on',{cup:1,oreilly:2,trucks:3}[b.dataset.s]===cur)})}
+ document.getElementById('controls').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+  if(b.dataset.m)NL.setMode(b.dataset.m);if(b.dataset.x)NL.setSpeed(+b.dataset.x);if(b.dataset.s)NL.series(b.dataset.s);sync()});
+ sync();setInterval(sync,1500);
+ if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js');
+})();
+</script></body></html>
