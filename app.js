@@ -10,6 +10,12 @@ var BUNDLED={};var RS=window.ROSTERS||{1:window.ROSTER||[]};if(!window.NO_BUNDLE
 var S={series:serOf(Q.series),mode:Q.mode==='test'||Q.mode==='demo'?'test':'live',speed:+Q.speed||1,feed:null,feedClock:0,lf:0,lapT:30,prevLap:-1,cars:{},track:null,trackId:null,
   focus:Q.driver||Q.car||null,sel:null,menu:false,menuIdx:0,freeze:false,finishSeen:0,next:null,lastTick:0,tickOff:0,tickW:0,liveActive:true};
 var $=function(id){return document.getElementById(id)};
+// v1.3: write DOM only on change. Rewriting innerHTML every poll re-created ~100 badge <img>s and re-rastered layers,
+// which on a memory-starved Fire Stick shows up as the screen blinking.
+function setH(el,h){if(typeof el==='string')el=$(el);if(el.__h!==h){el.__h=h;el.innerHTML=h}}
+function setT(el,t){if(typeof el==='string')el=$(el);if(el.__t!==t){el.__t=t;el.textContent=t}}
+function setC(el,c){if(typeof el==='string')el=$(el);if(el.className!==c)el.className=c}
+function hide(el,on){if(typeof el==='string')el=$(el);if(el.classList.contains('hidden')!==on)el.classList.toggle('hidden',on)}
 var cv=$('map'),cx=cv.getContext('2d'),W=cv.width,H=cv.height,bg=document.createElement('canvas'),RAT=1;bg.width=W;bg.height=H;
 var PHONE=false;
 // PWA: portrait phones get a stacked layout with a smaller virtual canvas; TV/landscape keep the 1360x910 map.
@@ -37,10 +43,13 @@ function badgeHTML(series,num,mf){var e=badgeImg(series,num);if(e.ok===false)ret
   return '<img class="bdg" src="'+e.img.src+'" onerror="__bfail(this,\''+num+'\',\''+mf+'\')">'}
 // ---------- data ----------
 function getJSON(url,cb){var done=false;
-  function viaBridge(){if(window.Android&&Android.http){try{var r=JSON.parse(Android.http(url,'GET','{}',''));if(r.status==200){cb(JSON.parse(r.body));return}}catch(e){}}cb(null)}
+  function viaBridge(){if(window.Android&&Android.httpAsync){var id='b'+(++getJSON.n);window.__bcb=window.__bcb||{};__bcb[id]=function(r){delete __bcb[id];try{if(r&&r.status==200){cb(JSON.parse(r.body));return}}catch(e){}cb(null)};Android.httpAsync(url,id);return}
+    if(window.Android&&Android.http){try{var r=JSON.parse(Android.http(url,'GET','{}',''));if(r.status==200){cb(JSON.parse(r.body));return}}catch(e){}}cb(null)}
   try{fetch(url,{cache:'no-store'}).then(function(r){if(!r.ok)throw 0;return r.json()}).then(function(j){done=true;cb(j)}).catch(function(){if(!done)viaBridge()})}catch(e){viaBridge()}}
+getJSON.n=0;
+var polling=false;
 function poll(){if(S.mode==='test'){ingest(TestRace.feed(clock()),clock());return}
-  var url=Q.feed||FEED;getJSON(url+(Q.feed?'':'?_='+Date.now()),function(j){if(j&&j.vehicles&&S.mode==='live')ingest(j,clock())})}
+  if(polling&&performance.now()-polling<15000)return;polling=performance.now();var url=Q.feed||FEED;getJSON(url+(Q.feed?'':'?_='+Date.now()),function(j){polling=false;if(j&&j.vehicles&&S.mode==='live')ingest(j,clock())})}
 function lapsLed(v){var n=0;(v.laps_led||[]).forEach(function(l){if(l.end_lap>=1)n+=l.end_lap-Math.max(1,l.start_lap)+1});return n}
 function stops(v){return (v.pit_stops||[]).filter(function(p){return p.pit_in_elapsed_time>0||p.pit_in_lap_count>0}).length}
 function inPit(v){var p=(v.pit_stops||[]).slice(-1)[0];return !!(p&&p.pit_in_elapsed_time>0&&p.pit_out_elapsed_time<p.pit_in_elapsed_time)}
@@ -75,14 +84,14 @@ function ingest(f,at){var first=!S.feed;
 // ---------- header + ticker ----------
 var FL={1:['GREEN','f1'],2:['CAUTION','f2'],3:['RED','f3'],4:['WHITE','f4'],8:['PRE-RACE','f8'],9:['CHECKERED','f9']};
 function flagOf(f){var x=FL[f.flag_state]||['—','f0'];if(f.run_type!==3&&f.flag_state===1)x=['GREEN','f1'];return x}
-function renderHeader(){var f=S.feed,fl=flagOf(f),race=f.run_type===3;$('flag').innerHTML=f.flag_state===9?'<span style="background:#000;padding:4px 10px;border-radius:7px;font-size:20px">CHECKERED</span>':fl[0];$('flag').className='flag '+fl[1];
-  $('lap').textContent=race?'LAP '+f.lap_number+' / '+f.laps_in_race:(f.run_type===2?'QUALIFYING':'PRACTICE');
-  $('togo').textContent=race?(f.laps_to_go>0?f.laps_to_go+' TO GO':'FINAL'):(f.flag_state===9?'SESSION OVER':f.vehicles.filter(function(v){return v.is_on_track}).length+' ON TRACK');
-  var m=$('mode');if(S.mode==='test'){m.textContent='TEST RACE'+(S.speed>1?' '+S.speed+'x':'');m.className='mode test'}else if(S.liveActive){m.textContent='LIVE';m.className='mode'}else{m.textContent='LAST SESSION';m.className='mode last'}
-  $('title').innerHTML='<span class="ser" style="background:'+(SCOL[f.series_id]||'#888')+'">'+(SHORT[f.series_id]||'S'+f.series_id)+'</span> '+f.run_name;document.documentElement.style.setProperty('--acc',SCOL[f.series_id]||'#ffb066');
-  $('stage').textContent=race&&f.stage&&f.stage.stage_num?'Stage '+f.stage.stage_num+' ends lap '+f.stage.finish_at_lap:'';
-  $('stats').textContent=race?'Cautions '+f.number_of_caution_segments+' ('+f.number_of_caution_laps+' laps) · Lead changes '+f.number_of_lead_changes:'';
-  $('trackname').textContent=f.track_name+' · '+f.track_length+' mi'}
+function renderHeader(){var f=S.feed,fl=flagOf(f),race=f.run_type===3;setH('flag',f.flag_state===9?'<span style="background:#000;padding:4px 10px;border-radius:7px;font-size:20px">CHECKERED</span>':fl[0]);setC('flag','flag '+fl[1]);
+  setT('lap',race?'LAP '+f.lap_number+' / '+f.laps_in_race:(f.run_type===2?'QUALIFYING':'PRACTICE'));
+  setT('togo',race?(f.laps_to_go>0?f.laps_to_go+' TO GO':'FINAL'):(f.flag_state===9?'SESSION OVER':f.vehicles.filter(function(v){return v.is_on_track}).length+' ON TRACK'));
+  var m=$('mode');if(S.mode==='test'){setT(m,'TEST RACE'+(S.speed>1?' '+S.speed+'x':''));setC(m,'mode test')}else if(S.liveActive){setT(m,'LIVE');setC(m,'mode')}else{setT(m,'LAST SESSION');setC(m,'mode last')}
+  setH('title','<span class="ser" style="background:'+(SCOL[f.series_id]||'#888')+'">'+(SHORT[f.series_id]||'S'+f.series_id)+'</span> '+f.run_name);var acc=SCOL[f.series_id]||'#ffb066';if(S.acc!==acc){S.acc=acc;document.documentElement.style.setProperty('--acc',acc)}
+  setT('stage',race&&f.stage&&f.stage.stage_num?'Stage '+f.stage.stage_num+' ends lap '+f.stage.finish_at_lap:'');
+  setT('stats',race?'Cautions '+f.number_of_caution_segments+' ('+f.number_of_caution_laps+' laps) · Lead changes '+f.number_of_lead_changes:'');
+  setT('trackname',f.track_name+' · '+f.track_length+' mi')}
 function fastest(V){var b=null;V.forEach(function(v){if(v.best_lap_time>0&&(!b||v.best_lap_time<b.best_lap_time))b=v});return b}
 function buildTicker(){var f=S.feed,V=f.vehicles,h=[],fb=fastest(V),race=f.run_type===3;S.lastTick=performance.now();S.tickLap=f.lap_number;
   function sec(k,t){h.push('<span class="ti sec"><span class="k">'+k+'</span>'+t+'</span>')}
@@ -94,40 +103,44 @@ function buildTicker(){var f=S.feed,V=f.vehicles,h=[],fb=fastest(V),race=f.run_t
   V.forEach(function(v,i){h.push('<span class="ti"><span class="p">P'+v.running_position+'</span>'+badgeHTML(f.series_id,v.vehicle_number,v.vehicle_manufacturer)+
     nm(v)+' <span class="g">'+(race?gapTxt(v):(v.best_lap_time>0?v.best_lap_time.toFixed(3):'—'))+(v.last_lap_time>0?' · '+v.last_lap_time.toFixed(3):'')+'</span></span>');
     if(i%10===9)info[(2+((i/10)|0))%4]()});
-  var s=$('tkstrip'),html=h.join('');s.innerHTML=html+html;S.tickW=s.scrollWidth/2;if(S.tickOff<-S.tickW)S.tickOff=0}
+  var s=$('tkstrip'),html=h.join('');if(s.__h===html+html)return;setH(s,html+html);S.tickW=s.scrollWidth/2;if(S.tickOff<-S.tickW)S.tickOff=0}
 function nm(v){var n=v.driver.full_name.replace(/\s*\(.*?\)|[#*]/g,'').trim().split(' ');return n.length>1?n.slice(-1)[0].replace('Jr.',n[n.length-2]+' Jr.'):n[0]}
 function nmFull(v){return v.driver.full_name.replace(/\s*\(.*?\)|[#*]/g,'').trim()}
 // ---------- leaderboard ----------
 var ROWS=window.PWA&&innerWidth<innerHeight?99:17;
 function renderBoard(){var f=S.feed,V=f.vehicles,fb=fastest(V),race=f.run_type===3,si=Math.max(0,idxOf(S.sel));
   var start=Math.max(0,Math.min(V.length-ROWS,si-Math.floor(ROWS/2)));if(si<ROWS-3)start=0;
-  var h='';V.slice(start,start+ROWS).forEach(function(v){var n=v.vehicle_number;
-    h+='<div data-n="'+n+'" class="row'+(n===S.sel?' cur':'')+(n===S.focus?' foc':'')+(fb&&fb===v?' fast':'')+'"><span class="ps">'+v.running_position+'</span><span class="bd">'+badgeHTML(f.series_id,n,v.vehicle_manufacturer)+
-      '</span><span class="dn">'+nm(v)+'</span>'+(inPit(v)?'<span class="pt">PIT</span>':'')+'<span class="gp">'+(race?gapTxt(v):fmtT(v.best_lap_time))+'</span><span class="ll">'+fmtT(v.last_lap_time)+'</span></div>'});
-  $('rows').innerHTML=h}
+  // v1.3: rows are persistent nodes patched in place, so badge <img>s survive polls instead of being re-created every 2.5 s
+  var box=$('rows'),list=V.slice(start,start+ROWS);
+  while(box.children.length<list.length){var d=document.createElement('div');d.innerHTML='<span class="ps"></span><span class="bd"></span><span class="dn"></span><span class="pt hidden">PIT</span><span class="gp"></span><span class="ll"></span>';box.appendChild(d)}
+  while(box.children.length>list.length)box.removeChild(box.lastChild);
+  list.forEach(function(v,i){var n=v.vehicle_number,r=box.children[i],c=r.children;
+    if(r.dataset.n!==n)r.dataset.n=n;setC(r,'row'+(n===S.sel?' cur':'')+(n===S.focus?' foc':'')+(fb&&fb===v?' fast':''));
+    setT(c[0],String(v.running_position));setH(c[1],badgeHTML(f.series_id,n,v.vehicle_manufacturer));setT(c[2],nm(v));hide(c[3],!inPit(v));
+    setT(c[4],race?gapTxt(v):fmtT(v.best_lap_time));setT(c[5],fmtT(v.last_lap_time))})}
 function idxOf(n){var V=S.feed?S.feed.vehicles:[];for(var i=0;i<V.length;i++)if(V[i].vehicle_number===n)return i;return -1}
-function renderFocus(){var el=$('focus'),c=S.focus&&S.cars[S.focus],fin=S.feed.run_type===3&&S.feed.flag_state===9&&S.finishSeen&&(S.mode==='test'||performance.now()-S.finishSeen<30000);if(!c||fin){el.classList.add('hidden');return}
+function renderFocus(){var el=$('focus'),c=S.focus&&S.cars[S.focus],fin=S.feed.run_type===3&&S.feed.flag_state===9&&S.finishSeen&&(S.mode==='test'||performance.now()-S.finishSeen<30000);if(!c||fin){hide(el,true);return}
   var v=c.v,f=S.feed,V=f.vehicles,i=idxOf(S.focus),a=V[i-1],ahead='—';
   if(a&&v.delta>=0&&a.delta>=0)ahead='+'+(v.delta-a.delta).toFixed(3)+' to #'+a.vehicle_number;else if(!a)ahead='Leading';
-  el.innerHTML='<span class="x">✕</span><div class="h">'+badgeHTML(f.series_id,v.vehicle_number,v.vehicle_manufacturer).replace('class="bdg"','class="bdg" style="height:60px"')+'<div><div class="nm">'+nmFull(v)+'</div><div class="mf">'+({Chv:'Chevrolet',Frd:'Ford',Tyt:'Toyota'}[v.vehicle_manufacturer]||v.vehicle_manufacturer||'')+(c.pit?' · ON PIT ROAD':'')+'</div></div><div class="pos">P'+v.running_position+'</div></div>'+
+  setH(el,'<span class="x">✕</span><div class="h">'+badgeHTML(f.series_id,v.vehicle_number,v.vehicle_manufacturer).replace('class="bdg"','class="bdg" style="height:60px"')+'<div><div class="nm">'+nmFull(v)+'</div><div class="mf">'+({Chv:'Chevrolet',Frd:'Ford',Tyt:'Toyota'}[v.vehicle_manufacturer]||v.vehicle_manufacturer||'')+(c.pit?' · ON PIT ROAD':'')+'</div></div><div class="pos">P'+v.running_position+'</div></div>'+
    '<div class="grid"><div><span>Gap to leader</span>'+gapTxt(v)+'</div><div><span>Car ahead</span>'+ahead+'</div><div><span>Last lap</span>'+fmtT(v.last_lap_time)+(v.last_lap_speed>0?' <small style="color:#aaa">'+v.last_lap_speed.toFixed(1)+'</small>':'')+'</div>'+
-   '<div><span>Best lap</span>'+fmtT(v.best_lap_time)+'</div><div><span>Laps led</span>'+lapsLed(v)+'</div><div><span>Pit stops</span>'+stops(v)+'</div></div><div class="hint">Back to clear · ▲▼ OK to switch driver</div>';el.classList.remove('hidden')}
+   '<div><span>Best lap</span>'+fmtT(v.best_lap_time)+'</div><div><span>Laps led</span>'+lapsLed(v)+'</div><div><span>Pit stops</span>'+stops(v)+'</div></div><div class="hint">Back to clear · ▲▼ OK to switch driver</div>');hide(el,false)}
 function renderFinish(){var el=$('finish'),f=S.feed,show=f.run_type===3&&f.flag_state===9&&S.finishSeen&&(S.mode==='test'||performance.now()-S.finishSeen<30000);
-  if(!show){el.classList.add('hidden');return}var V=f.vehicles,w=V[0];
-  el.innerHTML='<div class="chk"></div><div class="k">CHECKERED FLAG</div><div class="w">'+badgeHTML(f.series_id,w.vehicle_number,w.vehicle_manufacturer).replace('class="bdg"','class="bdg" style="height:80px"')+'<div class="wn">'+nmFull(w)+' wins</div></div>'+
+  if(!show){hide(el,true);return}var V=f.vehicles,w=V[0];
+  setH(el,'<div class="chk"></div><div class="k">CHECKERED FLAG</div><div class="w">'+badgeHTML(f.series_id,w.vehicle_number,w.vehicle_manufacturer).replace('class="bdg"','class="bdg" style="height:80px"')+'<div class="wn">'+nmFull(w)+' wins</div></div>'+
    '<div style="color:#bbb;font-size:22px">'+f.run_name+' · led '+lapsLed(w)+' laps</div><ol>'+V.slice(1,5).map(function(v){return '<li value="'+v.running_position+'">'+badgeHTML(f.series_id,v.vehicle_number,v.vehicle_manufacturer).replace('class="bdg"','class="bdg" style="height:28px"')+nmFull(v)+' <span style="color:#999">'+gapTxt(v)+'</span></li>'}).join('')+'</ol>'+
-   (S.mode==='test'?'<div class="hint">Test race restarts in '+Math.max(0,Math.ceil(40-(clock()-(f._test.finishT||clock()))/S.speed))+'s · ◀ menu</div>':'');el.classList.remove('hidden')}
+   (S.mode==='test'?'<div class="hint">Test race restarts in '+Math.max(0,Math.ceil(40-(clock()-(f._test.finishT||clock()))/S.speed))+'s · ◀ menu</div>':''));hide(el,false)}
 function etDate(s){var d=new Date(s+'Z'),m=d.getUTCMonth(),dst=m>2&&m<10||(m===2&&d.getUTCDate()>=8)||(m===10&&d.getUTCDate()<1);return new Date(d.getTime()+(dst?4:5)*3600000)}
 function loadNext(){var y=new Date().getFullYear();getJSON('https://cf.nascar.com/cacher/'+y+'/race_list_basic.json',function(j){if(!j)return;var best=null,now=Date.now();
   var per={};[1,2,3,4].forEach(function(s){var b=null;(j['series_'+s]||[]).forEach(function(r){var t=etDate(r.race_date).getTime();if(t>now-3*3600000&&(!b||t<b.t))b={t:t,r:r}});per[s]=b});S.next=per;renderNext()})}
-function renderNext(){var el=$('next');if(S.mode==='test'||S.liveActive||!S.next){el.classList.add('hidden');return}
+function renderNext(){var el=$('next');if(S.mode==='test'||S.liveActive||!S.next){hide(el,true);return}
   var opt={weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZone:'America/New_York'},order=[1,2,3,4];
   if(S.series)order=[S.series].concat(order.filter(function(x){return x!==S.series}));
   var h='<div class="k">NEXT RACES</div>';order.forEach(function(s,i){var n=S.next[s],r=n&&n.r;
     h+='<div class="nr'+(i===0?' first':'')+'"><span class="ser" style="background:'+SCOL[s]+'">'+SHORT[s]+'</span>'+
       (r?'<div><div class="r">'+r.race_name+'</div><div class="t">'+r.track_name+' · '+new Date(n.t).toLocaleString('en-US',opt)+' ET</div></div>'
         :'<div><div class="t">'+(s===4?"Not in NASCAR's public timing feed":'No upcoming race listed')+'</div></div>')+'</div>'});
-  el.innerHTML=h+'<div class="hint">'+(window.PWA?'Nothing live right now. Tap Test race to try a demo.':'Nothing live right now. Press ◀ for the menu to watch a test race.')+'</div>';el.classList.remove('hidden')}
+  setH(el,h+'<div class="hint">'+(window.PWA?'Nothing live right now. Tap Test race to try a demo.':'Nothing live right now. Press ◀ for the menu to watch a test race.')+'</div>');hide(el,false)}
 // ---------- map ----------
 var G={s:1,cx:0,cy:0};
 function sc(p,lat){return [G.cx+p.x*G.s+p.nx*(lat||0),G.cy+p.y*G.s+p.ny*(lat||0)]}
