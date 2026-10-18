@@ -77,7 +77,7 @@ function ingest(f,at){var first=!S.feed;
     if(race)c.off=Math.max(-0.02,c.off);c.leadLaps=(V[0]&&V[0].laps_completed)||0});
   for(var k in S.cars)if(!seen[k])delete S.cars[k];
   if(!S.sel&&V[0])S.sel=V[0].vehicle_number;
-  var age=(Date.now()-Date.parse(f.time_of_day_os))/60000;S.liveActive=S.mode==='test'||(!Q.nolive&&age<15&&f.flag_state!==9);
+  var tod=Date.parse(f.time_of_day_os);if(tod>Date.UTC(2020,0,1))S.lastTOD=tod;else tod=S.lastTOD||0;var age=tod?(Date.now()-tod)/60000:((Date.now()-(S.updWall||0))/60000);if(S.updWall&&Date.now()-S.updWall<180000&&f.flag_state!==9)age=Math.min(age,1);S.liveActive=S.mode==='test'||(!Q.nolive&&age<15&&f.flag_state!==9);
   if(race&&f.flag_state===9){if(!S.finishSeen)S.finishSeen=performance.now();}else S.finishSeen=0;
   if(first||performance.now()-S.lastTick>9000||f.lap_number!==S.tickLap)buildTicker();
   renderBoard();renderHeader();liveTick();renderFocus();renderFinish();renderNext()}
